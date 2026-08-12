@@ -1,6 +1,6 @@
 //
 //  HybridEventKit.swift
-//  NitroEventKit
+//  NitroEventKitX
 //
 //  Created by VLAD on 03.02.2025.
 //
@@ -19,7 +19,50 @@ class HybridEventKit: HybridEventKitSpec {
             throw RuntimeError.error(withMessage: EventKitError.calendarAvailability.message)
         }
     }
-    
+
+    private func checkRemindersAvailability() throws {
+        guard EventKitManager.shared.isRemindersAccessAvailable else {
+            throw RuntimeError.error(withMessage: EventKitError.remindersAvailability.message)
+        }
+    }
+
+    /// `nil` is what EventKit's predicates take to mean "every calendar".
+    private func calendars(matching calendarId: String?) throws -> [EKCalendar]? {
+        guard let calendarId = calendarId else { return nil }
+        return [try getCalendar(by: calendarId)]
+    }
+
+    private func events(from startDate: Date, to endDate: Date, calendarId: String?) throws -> [EventKitEvent] {
+        // One predicate spanning every calendar, rather than one predicate per
+        // calendar: an event belongs to exactly one calendar, so the union is
+        // the same set of events for a fraction of the EventKit round trips.
+        let predicate = eventStore.predicateForEvents(
+            withStart: startDate,
+            end: endDate,
+            calendars: try calendars(matching: calendarId)
+        )
+
+        return eventStore.events(matching: predicate).map(mapToNitroEvent)
+    }
+
+    /// EventKit answers reminder fetches on its own queue through a callback and
+    /// ships no async variant, so the bridge to Swift concurrency is manual.
+    private func fetchReminders(matching predicate: NSPredicate) async -> [EKReminder] {
+        await withCheckedContinuation { continuation in
+            self.eventStore.fetchReminders(matching: predicate) { reminders in
+                continuation.resume(returning: reminders ?? [])
+            }
+        }
+    }
+
+    /// A reminder with no due date is kept — it is undated, not out of range.
+    private static func isDueDate(of reminder: EKReminder, within start: Date?, and end: Date?) -> Bool {
+        guard let due = date(from: reminder.dueDateComponents) else { return true }
+        if let start = start, due < start { return false }
+        if let end = end, due > end { return false }
+        return true
+    }
+
     private func getCalendar(by identifier: String) throws -> EKCalendar {
         guard let calendar = self.eventStore.calendar(withIdentifier: identifier) else {
             throw RuntimeError.error(withMessage: EventKitError.calendarExistence.message)
@@ -39,62 +82,68 @@ class HybridEventKit: HybridEventKitSpec {
     func getMonthlyCalendarEvents(options: MonthlyEventOptions) throws -> NitroModules.Promise<[EventKitEvent]> {
         return Promise.async {
             try self.checkCalendarAvailability()
-            
-            let entityType = options.entityType
-            
-            let startDate = Date()
-            let endDate = Calendar.current.date(byAdding: .day, value: 31, to: startDate) ?? Date()
-            
-            let calendars: [EKCalendar]
-            if let calendarId = options.calendarId, let specificCalendar = self.eventStore.calendar(
-                withIdentifier: calendarId
-            ) {
-                calendars = [specificCalendar]
-            } else {
-                calendars = self.eventStore.calendars(for: self.mapToEVKitEntityType(entityType))
-            }
 
-            return calendars.flatMap { calendar in
-                let predicate = self.eventStore.predicateForEvents(
-                    withStart: startDate,
-                    end: endDate,
-                    calendars: [calendar]
-                )
-                return self.eventStore
-                    .events(matching: predicate)
-                    .map(self.mapToNitroEvent)
-            }
+            let startDate = Date()
+            let endDate = Calendar.current.date(byAdding: .day, value: 31, to: startDate) ?? startDate
+
+            return try self.events(from: startDate, to: endDate, calendarId: options.calendarId)
         }
     }
-    
+
     func getCalendarEventsByRange(options: RangeEventOptions) throws -> NitroModules.Promise<[EventKitEvent]> {
         return Promise.async {
             try self.checkCalendarAvailability()
-            
-            let entityType = options.entityType
 
-            let startDate = options.startDate.asDateFromMilliseconds
-            let endDate = options.endDate.asDateFromMilliseconds
+            return try self.events(
+                from: options.startDate.asDateFromMilliseconds,
+                to: options.endDate.asDateFromMilliseconds,
+                calendarId: options.calendarId
+            )
+        }
+    }
 
-            let calendars: [EKCalendar]
-            if let calendarId = options.calendarId, let specificCalendar = self.eventStore.calendar(
-                withIdentifier: calendarId
-            ) {
-                calendars = [specificCalendar]
-            } else {
-                calendars = self.eventStore.calendars(for: self.mapToEVKitEntityType(entityType))
-            }
-                    
-            return calendars.flatMap { calendar in
-                let predicate = self.eventStore.predicateForEvents(
-                    withStart: startDate,
-                    end: endDate,
-                    calendars: [calendar]
+    func getReminders(options: RangeReminderOptions) throws -> NitroModules.Promise<[EventKitReminder]> {
+        return Promise.async {
+            try self.checkRemindersAvailability()
+
+            let calendars = try self.calendars(matching: options.calendarId)
+            let start = options.startDate?.asDateFromMilliseconds
+            let end = options.endDate?.asDateFromMilliseconds
+
+            let predicate: NSPredicate
+            let needsDueDateFilter: Bool
+
+            switch options.completion {
+            case .incomplete:
+                predicate = self.eventStore.predicateForIncompleteReminders(
+                    withDueDateStarting: start,
+                    ending: end,
+                    calendars: calendars
                 )
-                return self.eventStore
-                    .events(matching: predicate)
-                    .map(self.mapToNitroEvent)
+                needsDueDateFilter = false
+            case .completed:
+                predicate = self.eventStore.predicateForCompletedReminders(
+                    withCompletionDateStarting: start,
+                    ending: end,
+                    calendars: calendars
+                )
+                needsDueDateFilter = false
+            case .all:
+                // predicateForReminders(in:) accepts no range, so this is the
+                // one case that has to bound the result after fetching.
+                predicate = self.eventStore.predicateForReminders(in: calendars)
+                needsDueDateFilter = start != nil || end != nil
             }
+
+            let reminders = await self.fetchReminders(matching: predicate)
+
+            guard needsDueDateFilter else {
+                return reminders.map(self.mapToNitroReminder)
+            }
+
+            return reminders
+                .filter { Self.isDueDate(of: $0, within: start, and: end) }
+                .map(self.mapToNitroReminder)
         }
     }
     
@@ -165,10 +214,18 @@ class HybridEventKit: HybridEventKitSpec {
     func getActiveCalendars() throws -> NitroModules.Promise<[EventKitCalendar]> {
         return Promise.async {
             try self.checkCalendarAvailability()
-            
+
             let calendars = self.eventStore.calendars(for: .event).map { self.mapToNitroCalendar($0) }
-            
+
             return calendars
+        }
+    }
+
+    func getReminderCalendars() throws -> NitroModules.Promise<[EventKitCalendar]> {
+        return Promise.async {
+            try self.checkRemindersAvailability()
+
+            return self.eventStore.calendars(for: .reminder).map { self.mapToNitroCalendar($0) }
         }
     }
     

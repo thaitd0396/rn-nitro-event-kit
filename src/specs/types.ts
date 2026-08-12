@@ -178,9 +178,18 @@ export interface EventKitParticipant {
 
 export interface EventKitEvent {
   eventIdentifier: string
+  /** Empty string when the event has no title; `EKEvent.title` is nullable. */
+  title: string
+  notes?: string
+  location?: string
+  url?: string
+  timeZone?: string
+  calendarIdentifier: string
+  calendarTitle: string
   isAllDay: boolean
   startDate: number
   endDate: number
+  hasAlarms: boolean
   structuredLocation?: EventKitStructuredLocation
   organizer?: EventKitParticipant
   availability: EventKitAvailability
@@ -190,6 +199,38 @@ export interface EventKitEvent {
   birthdayContactIdentifier?: string
   createdAt: number
   updatedAt: number
+}
+
+/**
+ * A single Reminders item.
+ *
+ * `dueDate` and `startDate` come from `DateComponents`, so a reminder with a
+ * day but no time resolves to local midnight — check `isDueDateTimed` before
+ * showing a clock time.
+ */
+export interface EventKitReminder {
+  reminderIdentifier: string
+  title: string
+  notes?: string
+  isCompleted: boolean
+  completionDate?: number
+  dueDate?: number
+  isDueDateTimed: boolean
+  startDate?: number
+  /** Raw EventKit priority, 0 = none, 1 (highest) to 9 (lowest). */
+  priority: number
+  hasAlarms: boolean
+  hasRecurrenceRules: boolean
+  calendarIdentifier: string
+  calendarTitle: string
+  createdAt: number
+  updatedAt: number
+}
+
+export enum EventKitReminderCompletion {
+  All = 0,
+  Incomplete = 1,
+  Completed = 2,
 }
 
 export type EventKitPermissionResult =
@@ -231,15 +272,30 @@ export interface CreateEventOptions {
   scheduleAlarmMinutesBefore?: number
 }
 
+// `entityType` is deliberately absent here, unlike upstream: `events(matching:)`
+// only ever returns EKEvents, so asking it for `Reminder` returned an empty
+// array rather than an error. Reminders have their own predicate and their own
+// method — see `getReminders`.
 export interface RangeEventOptions {
   startDate: number
   endDate: number
-  entityType: EventKitEntityType
   calendarId?: string
 }
 
 export interface MonthlyEventOptions {
-  entityType: EventKitEntityType
+  calendarId?: string
+}
+
+/**
+ * `startDate`/`endDate` bound the due date for `Incomplete`, and the completion
+ * date for `Completed` — that is the only range EventKit's reminder predicates
+ * accept. Omit both for no bound. Under `All` they are applied to the due date
+ * after fetching, and reminders with no due date are kept.
+ */
+export interface RangeReminderOptions {
+  startDate?: number
+  endDate?: number
+  completion: EventKitReminderCompletion
   calendarId?: string
 }
 

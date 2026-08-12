@@ -1,6 +1,6 @@
 //
 //  EventKitError.swift
-//  NitroEventKit
+//  NitroEventKitX
 //
 //  Created by VLAD on 07.02.2025.
 //
@@ -19,11 +19,14 @@ enum EventKitError: Int {
     case calendarSavingFailed = 9
     case calendarSourceInvalid = 10
     case eventUpdateFailed = 11
+    case remindersAvailability = 12
 
     var message: String {
         switch self {
         case .calendarAvailability:
             return "Calendar access is not available"
+        case .remindersAvailability:
+            return "Reminders access is not available"
         case .calendarExistence:
             return "Calendar with the given identifier was not found"
         case .calendarIsReadOnly:

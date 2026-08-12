@@ -1,6 +1,6 @@
 //
 //  HybridEventKit+Mapping.swift
-//  NitroEventKit
+//  NitroEventKitX
 //
 //  Created by VLAD on 03.02.2025.
 //
@@ -10,26 +10,67 @@ import EventKit
 import NitroModules
 
 extension HybridEventKit {
+    // EKEvent exposes eventIdentifier/title/startDate/endDate as implicitly
+    // unwrapped optionals, so every one of them is coalesced rather than forced
+    // — a detached or malformed occurrence with a nil date would otherwise trap.
     func mapToNitroEvent(_ event: EventKit.EKEvent) -> EventKitEvent {
         return EventKitEvent(
-            eventIdentifier: event.eventIdentifier,
+            eventIdentifier: event.eventIdentifier ?? "",
+            title: event.title ?? "",
+            notes: event.notes,
+            location: event.location,
+            url: event.url?.absoluteString,
+            timeZone: event.timeZone?.identifier,
+            calendarIdentifier: event.calendar?.calendarIdentifier ?? "",
+            calendarTitle: event.calendar?.title ?? "",
             isAllDay: event.isAllDay,
-            startDate: event.startDate.timeIntervalSince1970 * 1000,
-            endDate: event.endDate.timeIntervalSince1970 * 1000,
+            startDate: event.startDate?.unixTimestampInMilliseconds ?? 0,
+            endDate: event.endDate?.unixTimestampInMilliseconds ?? 0,
+            hasAlarms: event.hasAlarms,
             structuredLocation: mapToNitroStructuredLocation(structuredLocation: event.structuredLocation),
             organizer: mapToNitroOrganizer(organizer: event.organizer),
             availability: mapToNitroAvailability(event.availability),
             status: mapToNitroStatus(event.status),
             isDetached: event.isDetached,
-            occurrenceDate: (
-                event.occurrenceDate != nil
-            ) ? event.occurrenceDate.timeIntervalSince1970 * 1000 : nil,
+            occurrenceDate: event.occurrenceDate?.unixTimestampInMilliseconds,
             birthdayContactIdentifier: event.birthdayContactIdentifier,
-            createdAt: (event.creationDate?.timeIntervalSince1970 ?? 0) * 1000,
-            updatedAt: (event.lastModifiedDate?.timeIntervalSince1970 ?? 0) * 1000
+            createdAt: event.creationDate?.unixTimestampInMilliseconds ?? 0,
+            updatedAt: event.lastModifiedDate?.unixTimestampInMilliseconds ?? 0
         )
     }
-    
+
+    func mapToNitroReminder(_ reminder: EventKit.EKReminder) -> EventKitReminder {
+        let dueDateComponents = reminder.dueDateComponents
+
+        return EventKitReminder(
+            // EKReminder has no eventIdentifier; calendarItemIdentifier is the
+            // stable per-item id EventKit offers instead.
+            reminderIdentifier: reminder.calendarItemIdentifier,
+            title: reminder.title ?? "",
+            notes: reminder.notes,
+            isCompleted: reminder.isCompleted,
+            completionDate: reminder.completionDate?.unixTimestampInMilliseconds,
+            dueDate: Self.date(from: dueDateComponents)?.unixTimestampInMilliseconds,
+            // A reminder set for a day carries no hour, and resolving it lands
+            // on local midnight — which reads as "due at 00:00" unless the
+            // caller can tell the two apart.
+            isDueDateTimed: dueDateComponents?.hour != nil,
+            startDate: Self.date(from: reminder.startDateComponents)?.unixTimestampInMilliseconds,
+            priority: Double(reminder.priority),
+            hasAlarms: reminder.hasAlarms,
+            hasRecurrenceRules: reminder.hasRecurrenceRules,
+            calendarIdentifier: reminder.calendar?.calendarIdentifier ?? "",
+            calendarTitle: reminder.calendar?.title ?? "",
+            createdAt: reminder.creationDate?.unixTimestampInMilliseconds ?? 0,
+            updatedAt: reminder.lastModifiedDate?.unixTimestampInMilliseconds ?? 0
+        )
+    }
+
+    static func date(from components: DateComponents?) -> Date? {
+        guard let components = components else { return nil }
+        return Calendar.current.date(from: components)
+    }
+
     func mapToNitroAvailability(_ availability: EventKit.EKEventAvailability) -> EventKitAvailability {
         switch availability {
         case .notSupported:

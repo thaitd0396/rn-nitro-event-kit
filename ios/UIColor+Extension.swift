@@ -1,6 +1,6 @@
 //
 //  UIColor+Extension.swift
-//  NitroEventKit
+//  NitroEventKitX
 //
 //  Created by VLAD on 07.02.2025.
 //

@@ -1,6 +1,6 @@
 //
 //  Double+Extension.swift
-//  NitroEventKit
+//  NitroEventKitX
 //
 //  Created by VLAD on 15.02.2025.
 //

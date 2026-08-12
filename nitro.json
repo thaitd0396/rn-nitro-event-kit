@@ -1,19 +1,25 @@
 {
   "$schema": "https://nitro.margelo.com/nitro.schema.json",
-  "cxxNamespace": ["eventkit"],
+  "cxxNamespace": ["eventkitx"],
   "ios": {
-    "iosModuleName": "NitroEventKit"
+    "iosModuleName": "NitroEventKitX"
   },
   "android": {
-    "androidNamespace": ["eventkit"],
-    "androidCxxLibName": "NitroEventKit"
+    "androidNamespace": ["eventkitx"],
+    "androidCxxLibName": "NitroEventKitX"
   },
   "autolinking": {
     "EventKit": {
-      "swift": "HybridEventKit"
+      "ios": {
+        "language": "swift",
+        "implementationClassName": "HybridEventKit"
+      }
     },
     "CalendarPermission": {
-      "swift": "HybridCalendarPermission"
+      "ios": {
+        "language": "swift",
+        "implementationClassName": "HybridCalendarPermission"
+      }
     }
   },
   "ignorePaths": ["**/node_modules"]

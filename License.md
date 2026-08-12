@@ -1,5 +1,6 @@
 The MIT License (MIT)
 Copyright (c) 2025 Vladyslav Martynov
+Copyright (c) 2026 Habitify — fork published as `rn-nitro-event-kit`
 
 Permission is hereby granted, free of charge, to any person obtaining a copy
 of this software and associated documentation files (the "Software"), to deal

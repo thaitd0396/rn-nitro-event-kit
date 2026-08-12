@@ -1,6 +1,6 @@
 //
 //  CloseButton.swift
-//  NitroEventKit
+//  NitroEventKitX
 //
 //  Created by VLAD on 16.02.2025.
 //
