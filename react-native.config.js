@@ -7,10 +7,10 @@ module.exports = {
        * @type {import('@react-native-community/cli-types').IOSDependencyParams}
        */
       ios: {},
-      /**
-       * @type {import('@react-native-community/cli-types').AndroidDependencyParams}
-       */
-      android: {},
+      // EventKit is an Apple framework and this package ships no android
+      // sources, so declaring the platform would only give autolinking a
+      // project that is not there.
+      android: null,
     },
   },
 }
