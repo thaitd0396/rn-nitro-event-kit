@@ -290,7 +290,11 @@ export interface MonthlyEventOptions {
  * `startDate`/`endDate` bound the due date for `Incomplete`, and the completion
  * date for `Completed` — that is the only range EventKit's reminder predicates
  * accept. Omit both for no bound. Under `All` they are applied to the due date
- * after fetching, and reminders with no due date are kept.
+ * after fetching, for the same result.
+ *
+ * A reminder with no due date is returned only when no range is given: EventKit's
+ * own predicates drop undated reminders as soon as a range is passed, and `All`
+ * matches that so a ranged question gets one answer whichever filter asks it.
  */
 export interface RangeReminderOptions {
   startDate?: number

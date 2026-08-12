@@ -100,7 +100,11 @@ anything longer, so ask for the range you need.
 - `Incomplete` — range bounds the **due date**
 - `Completed` — range bounds the **completion date**
 - `All` — EventKit has no ranged predicate here, so the range is applied to the
-  due date after fetching, and undated reminders are kept
+  due date after fetching, for the same result
+
+A reminder with no due date comes back only when no range is given. EventKit's
+predicates drop undated reminders as soon as a range is passed, and `All` follows
+that rule rather than inventing its own.
 
 `dueDate` is resolved from `DateComponents`, so a reminder set for a day with no
 time lands on local midnight. `isDueDateTimed` is how you tell that apart from a

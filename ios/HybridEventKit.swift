@@ -55,9 +55,13 @@ class HybridEventKit: HybridEventKitSpec {
         }
     }
 
-    /// A reminder with no due date is kept — it is undated, not out of range.
+    /// An undated reminder is dropped once a range is given, because it is due in
+    /// no range at all. This is EventKit's own rule: its incomplete and completed
+    /// predicates already exclude undated reminders whenever a range is passed,
+    /// so keeping them here would make `All` answer a ranged question differently
+    /// from the other two.
     private static func isDueDate(of reminder: EKReminder, within start: Date?, and end: Date?) -> Bool {
-        guard let due = date(from: reminder.dueDateComponents) else { return true }
+        guard let due = date(from: reminder.dueDateComponents) else { return false }
         if let start = start, due < start { return false }
         if let end = end, due > end { return false }
         return true
